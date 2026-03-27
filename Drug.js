@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const DrugSchema = new mongoose.Schema({
     batchID: { type: String, required: true, unique: true },
-    parentBatchID: { type: String, default: null }, // 📦 PDF Requirement: Parent-Child Linking
+    parentBatchID: { type: String, default: null }, // 📦 PDF Requirement: Parent-Child Tokenization
     drugName: { type: String, required: true },
     manufacturer: { type: String, required: true },
     expiryDate: { type: Date, required: true },
