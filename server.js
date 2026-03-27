@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { ethers } = require('ethers'); // 💎 Blockchain Bridge
+const { ethers } = require('ethers');
 require('dotenv').config();
 const Drug = require('./Drug');
 
@@ -11,44 +11,39 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// --- BLOCKCHAIN CONFIG (As per PDF requirements) ---
-// --- BLOCKCHAIN CONFIG ---
+// --- BLOCKCHAIN CONFIG (Your existing setup) ---
 let wallet;
 try {
     const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://rpc.ankr.com/eth_sepolia");
-    
-    // This check prevents the crash if the key is still a placeholder
     if (process.env.PRIVATE_KEY && process.env.PRIVATE_KEY.length > 10 && !process.env.PRIVATE_KEY.includes("Your")) {
         wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
         console.log("💎 Blockchain Wallet Linked!");
     } else {
-        console.log("⚠️ Simulation Mode: Private Key not set, running Off-Chain logic.");
+        console.log("⚠️ Simulation Mode: Running Off-Chain logic.");
     }
 } catch (err) {
-    console.log("⚠️ Blockchain connection skipped (Simulation Mode active).");
+    console.log("⚠️ Blockchain connection skipped.");
 }
 
 // --- DB CONNECTION ---
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ Hybrid Cloud: MongoDB + Blockchain Active"))
+  .then(() => console.log("✅ PharmaGuard Hybrid Cloud: Active"))
   .catch((err) => console.log("❌ DB Error:", err));
 
 // --- ROUTES ---
 
-// 1. REGISTER: The "Parent Token" Creation
+// 1. REGISTER: Create Digital Twin (Includes Parent-Child Link)
 app.post('/register', async (req, res) => {
     try {
-        // Step A: Save to MongoDB for fast searching
         const newDrug = new Drug(req.body);
         
-        // Step B: Simulating the Smart Contract "Mint" 
-        // In a real demo, you'd call: await contract.mintDrug(req.body.batchID);
-        const txHash = ethers.id(req.body.batchID + Date.now()); // Generating a unique On-Chain ID
+        // Generate Blockchain ID (Simulating On-Chain Minting)
+        const txHash = ethers.id(req.body.batchID + Date.now()); 
         newDrug.blockchainHash = txHash;
 
         await newDrug.save();
         res.status(201).send({ 
-            message: "Immutable Ledger Entry Created! 🛡️", 
+            message: "Digital Twin & Parent-Child Link Created! 🛡️", 
             onChainHash: txHash,
             data: newDrug 
         });
@@ -57,14 +52,13 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// 2. TRANSFER: The "Child" Event (Traceability)
+// 2. TRANSFER: Update Journey (Audit Trail)
 app.post('/transfer/:id', async (req, res) => {
     try {
         const { newOwner } = req.body;
         const drug = await Drug.findOne({ batchID: req.params.id });
         if (!drug) return res.status(404).send({ message: "Drug not found." });
 
-        // Record the movement in the Audit Trail (Feature 1)
         drug.ownershipHistory.push({ from: drug.owner, to: newOwner });
         drug.owner = newOwner;
         
@@ -75,7 +69,7 @@ app.post('/transfer/:id', async (req, res) => {
     }
 });
 
-// 3. THE AUTONOMOUS KILL-SWITCH (Problem Statement Requirement)
+// 3. THE AUTONOMOUS KILL-SWITCH (Regulatory Recall)
 app.put('/recall/:id', async (req, res) => {
     try {
         const updated = await Drug.findOneAndUpdate(
@@ -83,9 +77,8 @@ app.put('/recall/:id', async (req, res) => {
             { isSafe: false }, 
             { new: true }
         );
-        // On the blockchain, this would trigger a 'StatusChange' event
         res.status(200).send({ 
-            message: "🚨 KILL-SWITCH ACTIVATED: Drug invalidated across all nodes.", 
+            message: "🚨 KILL-SWITCH ACTIVATED: Batch invalidated globally.", 
             status: "UNSAFE" 
         });
     } catch (err) {
@@ -93,13 +86,21 @@ app.put('/recall/:id', async (req, res) => {
     }
 });
 
-// 4. VERIFY: The Patient Gateway
+// 4. VERIFY: Patient Gateway (Includes Auto-Expiry Check)
 app.get('/verify/:id', async (req, res) => {
     try {
         const drug = await Drug.findOne({ batchID: req.params.id });
         if (!drug) return res.status(404).send({ message: "❌ FAKE DRUG DETECTED: No Ledger Entry." });
         
-        if (!drug.isSafe) return res.status(403).send({ message: "⚠️ RECALLED: Do not consume!" });
+        // Logic: Check if it's expired OR manually recalled
+        const isExpired = new Date() > new Date(drug.expiryDate);
+
+        if (!drug.isSafe || isExpired) {
+            return res.status(403).send({ 
+                message: isExpired ? "🚨 RECALL ALERT: Drug Expired!" : "⚠️ RECALLED: Do not consume!",
+                details: drug 
+            });
+        }
         
         res.status(200).send({ message: "✅ Authentic & Safe", details: drug });
     } catch (err) {
@@ -107,4 +108,4 @@ app.get('/verify/:id', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log(`🚀 PharmaGuard Node running on Port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 PharmaGuard Node running on http://localhost:${PORT}`));
